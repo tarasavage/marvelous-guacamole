@@ -1,9 +1,15 @@
 import base64
 import logging
-import time
-from typing import Callable, TypeVar
 
 from openai import APIConnectionError, APITimeoutError, OpenAI, RateLimitError
+from tenacity import (
+    before_sleep_log,
+    retry,
+    retry_if_exception,
+    stop_after_attempt,
+    wait_chain,
+    wait_fixed,
+)
 
 from app.config import settings
 
@@ -44,8 +50,6 @@ SUMMARY_USER_TEMPLATE = """Summarize the following document content:
 
 {content}"""
 
-T = TypeVar("T")
-
 
 class OpenAIServiceError(Exception):
     pass
@@ -73,23 +77,8 @@ def _is_retryable(exc: Exception) -> bool:
     return False
 
 
-def _call_with_retries(
-    fn: Callable[[], T],
-    max_attempts: int,
-    backoff_seconds: tuple[int, ...],
-) -> T:
-    last_exc: Exception | None = None
-    for attempt in range(max_attempts):
-        try:
-            return fn()
-        except Exception as exc:
-            last_exc = exc
-            if not _is_retryable(exc) or attempt >= max_attempts - 1:
-                raise
-            delay = backoff_seconds[min(attempt, len(backoff_seconds) - 1)]
-            logger.warning("OpenAI call failed (attempt %s/%s): %s", attempt + 1, max_attempts, exc)
-            time.sleep(delay)
-    raise last_exc  # type: ignore[misc]
+def _wait_chain(backoff_seconds: tuple[int, ...]):
+    return wait_chain(*(wait_fixed(seconds) for seconds in backoff_seconds))
 
 
 def check_context_limit(text: str) -> None:
@@ -98,6 +87,59 @@ def check_context_limit(text: str) -> None:
         raise ContextLimitError(
             "Document too dense to summarize within model context limits"
         )
+
+
+@retry(
+    retry=retry_if_exception(_is_retryable),
+    stop=stop_after_attempt(3),
+    wait=_wait_chain(EXTRACTION_BACKOFF),
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+    reraise=True,
+)
+def _call_extraction(client: OpenAI, content: list[dict]) -> str:
+    response = client.chat.completions.create(
+        model=MODEL,
+        temperature=0,
+        max_tokens=EXTRACTION_MAX_TOKENS,
+        messages=[
+            {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
+            {"role": "user", "content": content},
+        ],
+    )
+    choice = response.choices[0]
+    text = (choice.message.content or "").strip()
+    if choice.finish_reason == "length":
+        raise OpenAIServiceError("Vision response truncated (max tokens reached)")
+    if not text:
+        raise OpenAIServiceError("Vision response was empty")
+    return text
+
+
+@retry(
+    retry=retry_if_exception(_is_retryable),
+    stop=stop_after_attempt(2),
+    wait=_wait_chain(SUMMARY_BACKOFF),
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+    reraise=True,
+)
+def _call_summary(client: OpenAI, full_text: str) -> str:
+    response = client.chat.completions.create(
+        model=MODEL,
+        temperature=0,
+        max_tokens=SUMMARY_MAX_TOKENS,
+        messages=[
+            {"role": "system", "content": SUMMARY_SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": SUMMARY_USER_TEMPLATE.format(content=full_text),
+            },
+        ],
+    )
+    choice = response.choices[0]
+    text = (choice.message.content or "").strip()
+    if not text:
+        raise OpenAIServiceError("Summary response was empty")
+    return text
 
 
 def extract_batch(page_images: list[bytes], start_page: int, end_page: int) -> str:
@@ -115,48 +157,10 @@ def extract_batch(page_images: list[bytes], start_page: int, end_page: int) -> s
             }
         )
 
-    def _call() -> str:
-        response = client.chat.completions.create(
-            model=MODEL,
-            temperature=0,
-            max_tokens=EXTRACTION_MAX_TOKENS,
-            messages=[
-                {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
-                {"role": "user", "content": content},
-            ],
-        )
-        choice = response.choices[0]
-        text = (choice.message.content or "").strip()
-        if choice.finish_reason == "length":
-            raise OpenAIServiceError("Vision response truncated (max tokens reached)")
-        if not text:
-            raise OpenAIServiceError("Vision response was empty")
-        return text
-
-    return _call_with_retries(_call, max_attempts=3, backoff_seconds=EXTRACTION_BACKOFF)
+    return _call_extraction(client, content)
 
 
 def summarize(full_text: str) -> str:
     check_context_limit(full_text)
     client = _get_client()
-
-    def _call() -> str:
-        response = client.chat.completions.create(
-            model=MODEL,
-            temperature=0,
-            max_tokens=SUMMARY_MAX_TOKENS,
-            messages=[
-                {"role": "system", "content": SUMMARY_SYSTEM_PROMPT},
-                {
-                    "role": "user",
-                    "content": SUMMARY_USER_TEMPLATE.format(content=full_text),
-                },
-            ],
-        )
-        choice = response.choices[0]
-        text = (choice.message.content or "").strip()
-        if not text:
-            raise OpenAIServiceError("Summary response was empty")
-        return text
-
-    return _call_with_retries(_call, max_attempts=2, backoff_seconds=SUMMARY_BACKOFF)
+    return _call_summary(client, full_text)
