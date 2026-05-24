@@ -1,21 +1,15 @@
 # PDF Summary AI
 
-Take-home assignment for COXIT Full-Stack position: upload large PDFs, extract content via OpenAI vision, generate summaries, view processing history.
+Take-home assignment for COXIT Full-Stack position: upload large PDFs, extract content via OpenAI vision, generate summaries.
 
 ## Requirements & Architecture
-
-All scope and architecture decisions are documented in:
 
 **[docs/solutions/architecture-patterns/pdf-summary-ai-requirements-2026-05-24.md](docs/solutions/architecture-patterns/pdf-summary-ai-requirements-2026-05-24.md)**
 
 ## Quick Start (Docker)
 
-**Prerequisites:** Docker Desktop (or Docker Engine + Compose v2)
-
 ```bash
 cp .env.example .env
-# Optional for scaffold: add OPENAI_API_KEY to .env (required for summarization later)
-
 docker compose up --build
 ```
 
@@ -24,17 +18,41 @@ docker compose up --build
 | Frontend | http://localhost:5173       |
 | Backend  | http://localhost:8000       |
 | API docs | http://localhost:8000/docs  |
+| Redis    | localhost:6379 (internal)   |
 
-The frontend shows a **Backend connected** badge when it can reach the API. Upload and summarization are not implemented yet.
+Stack: **FastAPI** + **Celery worker** + **Redis** + **SQLite** + **Vue 3**.
+
+## API (Milestone 2)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/documents` | Upload PDF (`file` field) → `{ job_id, document_id }` |
+| `GET` | `/api/jobs/{job_id}` | Poll job status + progress |
+| `GET` | `/api/documents` | Last 5 completed summaries |
+| `GET` | `/api/documents/{id}` | Full document metadata |
+
+### Example
+
+```bash
+# Upload
+curl -F "file=@sample.pdf" http://localhost:8000/api/documents
+
+# Poll job (same UUID for job_id and document_id)
+curl http://localhost:8000/api/jobs/{id}
+```
+
+M2 worker advances jobs to `queued` only — vision summarization comes in Milestone 3.
 
 ## Project Structure
 
 ```
-backend/     FastAPI app (Python 3.12)
-frontend/    Vue 3 + Vite + Naive UI
-data/        Runtime uploads + SQLite (gitignored)
+backend/     FastAPI API + Celery tasks
+worker/      Celery consumer (same image as backend)
+redis/       Task broker
+frontend/    Vue 3 + Naive UI
+data/        Uploads + SQLite (gitignored)
 ```
 
 ## Status
 
-**Scaffold complete** — Docker Compose, backend stub, frontend shell. PDF pipeline next.
+**Milestone 2 complete** — upload, validation, SQLite, Celery/Redis job dispatch, read APIs.
