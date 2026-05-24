@@ -17,5 +17,7 @@ celery_app.conf.update(
 @worker_process_init.connect
 def init_worker_db(**_kwargs) -> None:
     from app.db import init_db
+    from app.recovery import recover_stuck_jobs
 
     init_db(settings.data_dir)
+    recover_stuck_jobs()

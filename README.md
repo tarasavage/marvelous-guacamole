@@ -10,6 +10,7 @@ Take-home assignment for COXIT Full-Stack position: upload large PDFs, extract c
 
 ```bash
 cp .env.example .env
+# Add OPENAI_API_KEY to .env — required for end-to-end summarization
 docker compose up --build
 ```
 
@@ -18,11 +19,10 @@ docker compose up --build
 | Frontend | http://localhost:5173       |
 | Backend  | http://localhost:8000       |
 | API docs | http://localhost:8000/docs  |
-| Redis    | localhost:6379 (internal)   |
 
-Stack: **FastAPI** + **Celery worker** + **Redis** + **SQLite** + **Vue 3**.
+Stack: **FastAPI** + **Celery worker** + **Redis** + **SQLite** + **Vue 3** + **OpenAI gpt-4o-mini**.
 
-## API (Milestone 2)
+## API
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -30,6 +30,10 @@ Stack: **FastAPI** + **Celery worker** + **Redis** + **SQLite** + **Vue 3**.
 | `GET` | `/api/jobs/{job_id}` | Poll job status + progress |
 | `GET` | `/api/documents` | Last 5 completed summaries |
 | `GET` | `/api/documents/{id}` | Full document metadata |
+
+### Job status flow
+
+`pending` → `queued` → `extracting` (batch N/M) → `summarizing` → `completed` | `failed`
 
 ### Example
 
@@ -39,9 +43,18 @@ curl -F "file=@sample.pdf" http://localhost:8000/api/documents
 
 # Poll job (same UUID for job_id and document_id)
 curl http://localhost:8000/api/jobs/{id}
+
+# Fetch summary when completed
+curl http://localhost:8000/api/documents/{id}
 ```
 
-M2 worker advances jobs to `queued` only — vision summarization comes in Milestone 3.
+## Limitations
+
+- Max **50 MB**, **100 pages** per PDF
+- **Single worker** — one PDF processes at a time; others queue
+- Dense documents may hit OpenAI context limits (clear error, no map-reduce)
+- Worker crash during extraction **restarts from batch 1** (extraction not checkpointed)
+- `OPENAI_API_KEY` required in `.env` for backend and worker services
 
 ## Project Structure
 
@@ -55,4 +68,4 @@ data/        Uploads + SQLite (gitignored)
 
 ## Status
 
-**Milestone 2 complete** — upload, validation, SQLite, Celery/Redis job dispatch, read APIs.
+**Milestone 3 complete** — vision extraction + summary pipeline in Celery worker. Frontend upload/polling UI deferred to Milestone 5.
