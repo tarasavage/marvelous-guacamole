@@ -14,7 +14,8 @@ def _completion(content: str = "extracted markdown", finish_reason: str = "stop"
                 message=SimpleNamespace(content=content),
                 finish_reason=finish_reason,
             )
-        ]
+        ],
+        usage=SimpleNamespace(prompt_tokens=100, completion_tokens=50, total_tokens=150),
     )
 
 

@@ -51,7 +51,13 @@ class ProcessDocumentUseCase:
                 start_page, end_page = page_range_for_batch(batch_num, document.total_pages)
                 try:
                     images = rasterize_batch(document.file_path, batch_num, document.total_pages)
-                    markdown = openai_service.extract_batch(images, start_page, end_page)
+                    markdown = openai_service.extract_batch(
+                        images,
+                        start_page,
+                        end_page,
+                        document_id=document_id,
+                        batch_num=batch_num,
+                    )
                 except openai_service.OpenAIServiceError as exc:
                     self._fail_document(
                         document,
@@ -77,7 +83,7 @@ class ProcessDocumentUseCase:
 
             full_text = "\n\n".join(chunks)
             try:
-                summary = openai_service.summarize(full_text)
+                summary = openai_service.summarize(full_text, document_id=document_id)
             except openai_service.ContextLimitError as exc:
                 self._fail_document(document, str(exc))
                 return

@@ -5,12 +5,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.db import init_db
+from app.logging_config import configure_logging
 from app.recovery import recover_stuck_jobs
 from app.routers import documents, root
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    configure_logging(settings.log_level)
     init_db(settings.data_dir)
     recover_stuck_jobs()
     yield

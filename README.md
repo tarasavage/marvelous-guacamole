@@ -72,7 +72,30 @@ Both services read the same `.env`. Without a key, uploads succeed but jobs fail
 | `OPENAI_API_KEY` | OpenAI auth (backend + worker) |
 | `DATA_DIR` | Upload + DB path inside containers |
 | `REDIS_URL` | Celery broker |
+| `LOG_LEVEL` | App log level (`INFO`, `DEBUG`, …) for backend + worker |
+| `DEBUG_LLM` | `true` to dump LLM prompts/responses under `data/debug/<document_id>/` |
 | `VITE_API_URL` | API base URL for browser |
+
+## Debugging LLM calls
+
+OpenAI runs in the **Celery worker**, not the API process.
+
+```bash
+docker compose logs -f worker
+```
+
+Each vision/summary call logs one JSON line (`llm_call_success` / `llm_call_failure`) with `document_id`, batch/pages, tokens, latency, and `finish_reason`. Base64 images are never logged.
+
+For full prompt/response inspection locally:
+
+```bash
+# in .env
+DEBUG_LLM=true
+LOG_LEVEL=DEBUG
+docker compose up --build
+```
+
+Artifacts land in `data/debug/<document_id>/`. OpenAI’s [Usage dashboard](https://platform.openai.com/usage) shows aggregate tokens/cost per API key (not per document).
 
 ## API
 

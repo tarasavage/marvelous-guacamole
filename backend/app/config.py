@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     data_dir: str = "./data"
     redis_url: str = "redis://localhost:6379/0"
     cors_origins: list[str] = ["http://localhost:5173"]
+    log_level: str = "INFO"
+    debug_llm: bool = False
 
 
 settings = Settings()
