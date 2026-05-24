@@ -49,17 +49,19 @@ Decisions below are **locked** unless explicitly revisited.
 ## Architecture Overview
 
 ```
-┌─────────────┐     poll      ┌──────────────┐     queue     ┌─────────────────┐
-│  Vue 3 SPA  │ ◄──────────► │ FastAPI API  │ ────────────► │ Single worker   │
-│  (Naive UI) │   REST       │  + SQLite    │               │ PDF → Vision    │
-└─────────────┘              └──────────────┘               │ → Summary       │
-       │                            │                        └────────┬────────┘
-       │                            │                                 │
-       │                            ▼                                 ▼
-       │                     ./data/db.sqlite                  OpenAI gpt-4o-mini
+┌─────────────┐     poll      ┌──────────────┐   Celery/Redis  ┌─────────────────┐
+│  Vue 3 SPA  │ ◄──────────► │ FastAPI API  │ ───────────────► │ Celery worker   │
+│  (Naive UI) │   REST       │  + SQLite    │                  │ PDF → Vision    │
+└─────────────┘              └──────────────┘                  │ → Summary       │
+       │                            │                           └────────┬────────┘
+       │                            │                                    │
+       │                            ▼                                    ▼
+       │                     ./data/db.sqlite                     OpenAI gpt-4o-mini
        │                     ./data/uploads/{uuid}.pdf
-       └──────────────────────────────────────────────────────────────────────
+       └──────────────────────────────────────────────────────────────────────────
 ```
+
+**Implementation note:** The repo uses **Celery + Redis** with a dedicated `worker` Compose service (`--concurrency=1`) instead of an in-process asyncio queue. Job polling, single-worker semantics, and status values are unchanged.
 
 **Processing pipeline:**
 
@@ -120,7 +122,7 @@ Only **summary** persisted after success — intermediate extraction discarded f
 | Stage | Behavior |
 |-------|----------|
 | Upload | `POST /api/documents` returns `{ job_id, document_id }` immediately |
-| Processing | Background worker (asyncio queue, single worker) |
+| Processing | **Celery + Redis** background worker (`worker` service, `--concurrency=1`); API dispatches tasks after upload |
 | Frontend | Poll `GET /api/jobs/{job_id}` every ~2 seconds |
 | Progress UI | Staged: `Uploading` → `Extracting (batch N/M)` → `Summarizing` → `Done` |
 
