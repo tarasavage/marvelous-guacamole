@@ -219,3 +219,9 @@ __marimo__/
 
 # Compound Engineering local config
 .compound-engineering/*.local.yaml
+
+# Project runtime data (uploads, SQLite)
+data/
+
+# Node
+node_modules/
