@@ -216,3 +216,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Compound Engineering local config
+.compound-engineering/*.local.yaml
