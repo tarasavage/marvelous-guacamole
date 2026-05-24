@@ -1,7 +1,27 @@
 <script setup lang="ts">
-import { NAlert, NCard, NLayout, NLayoutContent, NLayoutHeader, NSpace, NText, NUpload, NUploadDragger } from "naive-ui";
+import { ref, watch } from "vue";
+import { NCard, NLayout, NLayoutContent, NLayoutHeader, NSpace, NText } from "naive-ui";
 
 import BackendStatus from "./components/BackendStatus.vue";
+import DocumentHistory from "./components/DocumentHistory.vue";
+import JobProgress from "./components/JobProgress.vue";
+import PdfUpload from "./components/PdfUpload.vue";
+import { useJobPolling } from "./composables/useJobPolling";
+
+const activeJobId = ref<string | null>(null);
+const historyRef = ref<InstanceType<typeof DocumentHistory> | null>(null);
+
+const { job, pollError, isPolling, isCompleted } = useJobPolling(activeJobId);
+
+function onUploaded(jobId: string) {
+  activeJobId.value = jobId;
+}
+
+watch(isCompleted, (completed) => {
+  if (completed) {
+    historyRef.value?.refresh();
+  }
+});
 </script>
 
 <template>
@@ -15,16 +35,14 @@ import BackendStatus from "./components/BackendStatus.vue";
     <n-layout-content style="padding: 24px; max-width: 720px; margin: 0 auto">
       <n-space vertical size="large">
         <n-card title="Upload PDF">
-          <n-upload disabled :show-file-list="false">
-            <n-upload-dragger>
-              <n-text depth="3">Drag & drop a PDF here (coming soon)</n-text>
-            </n-upload-dragger>
-          </n-upload>
+          <n-space vertical>
+            <PdfUpload @uploaded="onUploaded" />
+            <JobProgress :job="job" :poll-error="pollError" :is-polling="isPolling" />
+          </n-space>
         </n-card>
-        <n-alert type="info" title="Scaffold milestone">
-          Docker Compose, backend API, and frontend shell are running. Upload and summarization
-          pipeline coming next.
-        </n-alert>
+        <n-card title="Recent summaries">
+          <DocumentHistory ref="historyRef" />
+        </n-card>
       </n-space>
     </n-layout-content>
   </n-layout>

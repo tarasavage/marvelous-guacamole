@@ -68,4 +68,4 @@ data/        Uploads + SQLite (gitignored)
 
 ## Status
 
-**Milestone 3 complete** — vision extraction + summary pipeline in Celery worker. Frontend upload/polling UI deferred to Milestone 5.
+**Milestone 5 complete** — upload UI, job polling with staged progress, history with inline summary expand. Submission polish (Loom, expanded README) is optional follow-up.
