@@ -122,9 +122,8 @@ curl http://localhost:8000/api/documents/{id}
 
 ## Demo / Loom
 
-Recording checklist: [docs/demo/loom-script.md](docs/demo/loom-script.md)
 
-**Loom link:** _(add your recording URL here before submission)_
+**Demo recording:** [https://www.loom.com/share/2c94e80cb6db447c8ba72aef9c146e4f](https://www.loom.com/share/2c94e80cb6db447c8ba72aef9c146e4f)
 
 ## Limitations
 
